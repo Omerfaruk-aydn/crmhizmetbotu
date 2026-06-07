@@ -1,0 +1,427 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Business {
+  id               String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name             String
+  slug             String               @unique
+  sector           String?
+  phone            String?
+  whatsappNumber   String?              @map("whatsapp_number")
+  instagramHandle  String?              @map("instagram_handle")
+  website          String?
+  address          String?
+  locationUrl      String?              @map("location_url")
+  timezone         String               @default("Europe/Istanbul")
+  brandTone        String               @default("Professional") @map("brand_tone")
+  primaryColor     String               @default("#4f46e5") @map("primary_color")
+  status           String               @default("active")
+  createdAt        DateTime             @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime             @default(now()) @map("updated_at") @db.Timestamptz
+  deletedAt        DateTime?            @map("deleted_at") @db.Timestamptz
+
+  users            BusinessUser[]
+  customers        Customer[]
+  conversations    Conversation[]
+  messages         Message[]
+  kbItems          KnowledgeBaseItem[]
+  services         Service[]
+  servicePrices    ServicePrice[]
+  appointments     Appointment[]
+  leadEvents       LeadEvent[]
+  handoffs         Handoff[]
+  tags             Tag[]
+  customerTags     CustomerTag[]
+  aiLogs           AiLog[]
+  aiFeedback       AiFeedback[]
+  integrations     Integration[]
+  notifications    Notification[]
+  auditLogs        AuditLog[]
+  usageLogs        UsageLog[]
+  subscriptions    Subscription[]
+
+  @@map("businesses")
+}
+
+model Profile {
+  id           String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  fullName     String?        @map("full_name")
+  email        String         @unique
+  avatarUrl    String?        @map("avatar_url")
+  passwordHash String         @map("password_hash")
+  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz
+
+  businessUsers BusinessUser[]
+  conversations Conversation[]
+  messages      Message[]
+  kbItems       KnowledgeBaseItem[]
+  appointments  Appointment[]
+  handoffs      Handoff[]
+  aiFeedback    AiFeedback[]
+  notifications Notification[]
+  auditLogs     AuditLog[]
+
+  @@map("profiles")
+}
+
+model BusinessUser {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  businessId String   @map("business_id") @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  role       String // super_admin, business_owner, manager, agent, viewer
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  user       Profile  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, userId])
+  @@map("business_users")
+}
+
+model Customer {
+  id            String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  businessId    String        @map("business_id") @db.Uuid
+  name          String?
+  phone         String?
+  email         String?
+  instagramId   String?       @map("instagram_id")
+  externalId    String?       @map("external_id")
+  sourceChannel String        @default("web") @map("source_channel")
+  status        String        @default("lead")
+  leadScore     Int           @default(0) @map("lead_score")
+  language      String        @default("tr")
+  notes         String?
+  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime      @default(now()) @map("updated_at") @db.Timestamptz
+  deletedAt     DateTime?     @map("deleted_at") @db.Timestamptz
+
+  business      Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  conversations Conversation[]
+  messages      Message[]
+  appointments  Appointment[]
+  leadEvents    LeadEvent[]
+  handoffs      Handoff[]
+  customerTags  CustomerTag[]
+
+  @@map("customers")
+}
+
+model Conversation {
+  id            String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  businessId    String        @map("business_id") @db.Uuid
+  customerId    String        @map("customer_id") @db.Uuid
+  channel       String        @default("web")
+  status        String        @default("active") // active, handoff, closed
+  aiEnabled     Boolean       @default(true) @map("ai_enabled")
+  assignedTo    String?       @map("assigned_to") @db.Uuid
+  lastMessageAt DateTime      @default(now()) @map("last_message_at") @db.Timestamptz
+  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime      @default(now()) @map("updated_at") @db.Timestamptz
+
+  business      Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customer      Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  assignee      Profile?      @relation(fields: [assignedTo], references: [id], onDelete: SetNull)
+  messages      Message[]
+  appointments  Appointment[]
+  leadEvents    LeadEvent[]
+  handoffs      Handoff[]
+  aiLogs        AiLog[]
+
+  @@map("conversations")
+}
+
+model Message {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  businessId     String       @map("business_id") @db.Uuid
+  conversationId String       @map("conversation_id") @db.Uuid
+  customerId     String       @map("customer_id") @db.Uuid
+  senderType     String       @map("sender_type") // customer, ai, agent, system
+  senderId       String?      @map("sender_id") @db.Uuid
+  content        String
+  intent         String?
+  aiConfidence   Float?       @map("ai_confidence")
+  metadata       Json         @default("{}")
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz
+
+  business       Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  customer       Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  sender         Profile?     @relation(fields: [senderId], references: [id], onDelete: SetNull)
+  aiLogs         AiLog[]
+  aiFeedback     AiFeedback[]
+
+  @@map("messages")
+}
+
+model KnowledgeBaseItem {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  businessId String    @map("business_id") @db.Uuid
+  title      String
+  content    String
+  category   String    @default("General")
+  tags       String[]  @default([])
+  priority   Int       @default(0)
+  isActive   Boolean   @default(true) @map("is_active")
+  sourceType String    @default("manual") @map("source_type")
+  createdBy  String?   @map("created_by") @db.Uuid
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime  @default(now()) @map("updated_at") @db.Timestamptz
+  deletedAt  DateTime? @map("deleted_at") @db.Timestamptz
+
+  business   Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  creator    Profile?  @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+
+  @@map("knowledge_base_items")
+}
+
+model Service {
+  id              String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  businessId      String         @map("business_id") @db.Uuid
+  name            String
+  description     String?
+  category        String?
+  durationMinutes Int            @map("duration_minutes")
+  isBookable      Boolean        @default(true) @map("is_bookable")
+  isActive        Boolean        @default(true) @map("is_active")
+  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime       @default(now()) @map("updated_at") @db.Timestamptz
+
+  business        Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  prices          ServicePrice[]
+  appointments    Appointment[]
+
+  @@map("services")
+}
+
+model ServicePrice {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  businessId   String   @map("business_id") @db.Uuid
+  serviceId    String   @map("service_id") @db.Uuid
+  price        Float?
+  priceMin     Float?   @map("price_min")
+  priceMax     Float?   @map("price_max")
+  currency     String   @default("TRY")
+  displayPrice Boolean  @default(true) @map("display_price")
+  note         String?
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime @default(now()) @map("updated_at") @db.Timestamptz
+
+  business     Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  service      Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@map("service_prices")
+}
+
+model Appointment {
+  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  businessId     String        @map("business_id") @db.Uuid
+  customerId     String        @map("customer_id") @db.Uuid
+  conversationId String?       @map("conversation_id") @db.Uuid
+  serviceId      String?       @map("service_id") @db.Uuid
+  requestedDate  String?       @map("requested_date") // Date stored as string e.g. YYYY-MM-DD
+  requestedTime  String?       @map("requested_time") // Time stored as string e.g. HH:MM:SS
+  customerName   String?       @map("customer_name")
+  customerPhone  String?       @map("customer_phone")
+  note           String?
+  sourceChannel  String        @default("web") @map("source_channel")
+  status         String        @default("new") // new, pending_confirmation, confirmed, cancelled, completed
+  assignedTo     String?       @map("assigned_to") @db.Uuid
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime      @default(now()) @map("updated_at") @db.Timestamptz
+
+  business       Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customer       Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  service        Service?      @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  assignee       Profile?      @relation(fields: [assignedTo], references: [id], onDelete: SetNull)
+
+  @@map("appointments")
+}
+
+model LeadEvent {
+  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  businessId     String        @map("business_id") @db.Uuid
+  customerId     String        @map("customer_id") @db.Uuid
+  conversationId String?       @map("conversation_id") @db.Uuid
+  eventType      String        @map("event_type")
+  scoreDelta     Int           @map("score_delta")
+  description    String?
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz
+
+  business       Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customer       Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+
+  @@map("lead_events")
+}
+
+model Handoff {
+  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  businessId     String        @map("business_id") @db.Uuid
+  conversationId String        @map("conversation_id") @db.Uuid
+  customerId     String        @map("customer_id") @db.Uuid
+  reason         String?
+  priority       String        @default("medium")
+  status         String        @default("open") // open, assigned, resolved, closed
+  assignedTo     String?       @map("assigned_to") @db.Uuid
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz
+  resolvedAt     DateTime?     @map("resolved_at") @db.Timestamptz
+
+  business       Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  conversation   Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  customer       Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  assignee       Profile?      @relation(fields: [assignedTo], references: [id], onDelete: SetNull)
+
+  @@map("handoffs")
+}
+
+model Tag {
+  id         String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  businessId String        @map("business_id") @db.Uuid
+  name       String
+  color      String        @default("#6b7280")
+  createdAt  DateTime      @default(now()) @map("created_at") @db.Timestamptz
+
+  business   Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  links      CustomerTag[]
+
+  @@unique([businessId, name])
+  @@map("tags")
+}
+
+model CustomerTag {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  businessId String   @map("business_id") @db.Uuid
+  customerId String   @map("customer_id") @db.Uuid
+  tagId      String   @map("tag_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  tag        Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([customerId, tagId])
+  @@map("customer_tags")
+}
+
+model AiLog {
+  id               String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  businessId       String        @map("business_id") @db.Uuid
+  conversationId   String        @map("conversation_id") @db.Uuid
+  messageId        String?       @map("message_id") @db.Uuid
+  provider         String
+  model            String
+  promptTokens     Int?          @map("prompt_tokens")
+  completionTokens Int?          @map("completion_tokens")
+  intent           String?
+  confidence       Float?
+  riskLevel        String?       @map("risk_level")
+  rawResponse      Json?         @map("raw_response")
+  error            String?
+  createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz
+
+  business         Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  conversation     Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  message          Message?      @relation(fields: [messageId], references: [id], onDelete: SetNull)
+
+  @@map("ai_logs")
+}
+
+model AiFeedback {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  businessId   String   @map("business_id") @db.Uuid
+  messageId    String   @map("message_id") @db.Uuid
+  feedbackType String   @map("feedback_type") // thumbs_up, thumbs_down
+  comment      String?
+  createdBy    String?  @map("created_by") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  business     Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  message      Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  creator      Profile? @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+
+  @@map("ai_feedback")
+}
+
+model Integration {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  businessId String   @map("business_id") @db.Uuid
+  provider   String // whatsapp, instagram, calendar
+  status     String   @default("disconnected") // active, disconnected, error
+  config     Json     @default("{}")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime @default(now()) @map("updated_at") @db.Timestamptz
+
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, provider])
+  @@map("integrations")
+}
+
+model Notification {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  businessId String    @map("business_id") @db.Uuid
+  userId     String?   @map("user_id") @db.Uuid
+  type       String // handoff_required, hot_lead, appointment_requested, system
+  title      String
+  body       String
+  status     String    @default("unread") // unread, read
+  metadata   Json      @default("{}")
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  readAt     DateTime? @map("read_at") @db.Timestamptz
+
+  business   Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  user       Profile?  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+model AuditLog {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  businessId String?  @map("business_id") @db.Uuid
+  userId     String?  @map("user_id") @db.Uuid
+  action     String
+  entityType String   @map("entity_type")
+  entityId   String?  @map("entity_id") @db.Uuid
+  metadata   Json     @default("{}")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  business   Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
+  user       Profile?  @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@map("audit_logs")
+}
+
+model UsageLog {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  businessId String   @map("business_id") @db.Uuid
+  usageType  String   @map("usage_type") // ai_message, handoff_agent, integration_call
+  quantity   Int      @default(1)
+  metadata   Json     @default("{}")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@map("usage_logs")
+}
+
+model Subscription {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  businessId         String   @map("business_id") @db.Uuid
+  plan               String   @default("starter") // starter, professional, enterprise
+  status             String   @default("active") // active, trialing, past_due, canceled
+  currentPeriodStart DateTime @default(now()) @map("current_period_start") @db.Timestamptz
+  currentPeriodEnd   DateTime @map("current_period_end") @db.Timestamptz
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime @default(now()) @map("updated_at") @db.Timestamptz
+
+  business           Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@map("subscriptions")
+}
