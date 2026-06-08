@@ -2,15 +2,15 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 
 export async function GET(request: Request) {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || (() => {
+      const host = request.headers.get('host') || 'localhost:3000';
+      const protocol = host.includes('localhost') ? 'http' : 'https';
+      return `${protocol}://${host}`;
+  })();
+
+  const getRedirectUrl = (path: string) => new URL(path, appUrl);
+
   try {
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || (() => {
-        const host = request.headers.get('host') || 'localhost:3000';
-        const protocol = host.includes('localhost') ? 'http' : 'https';
-        return `${protocol}://${host}`;
-    })();
-
-    const getRedirectUrl = (path: string) => new URL(path, appUrl);
-
     const { searchParams } = new URL(request.url);
     let code = searchParams.get('code');
     const businessId = searchParams.get('state');
