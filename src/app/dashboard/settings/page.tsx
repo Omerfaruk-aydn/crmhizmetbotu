@@ -411,18 +411,18 @@ export default function SettingsPage() {
                 ) : (
                   <div className="flex flex-col gap-1">
                     <div className="flex justify-between items-center">
-                      <label className="text-[9px] text-zinc-500 uppercase font-semibold">Oturum Kodu (Session JSON)</label>
+                      <label className="text-[9px] text-zinc-500 uppercase font-semibold">Oturum Kodu veya Çerez Listesi</label>
                     </div>
                     <textarea
                       required
                       rows={3}
                       value={igSessionJson}
                       onChange={(e) => setIgSessionJson(e.target.value)}
-                      placeholder='{"cookies": [...], "ds_user_id": "..."}'
+                      placeholder='[{"name": "sessionid", "value": "..."}, ...]'
                       className="bg-zinc-900 border border-zinc-800 rounded-xl p-2.5 text-[10px] text-zinc-300 font-mono outline-none focus:border-zinc-700 w-full resize-none"
                     />
                     <p className="text-[9px] text-zinc-500 leading-normal mt-0.5">
-                      Instagram IP engellemelerini aşmak için bilgisayarınızda yerel olarak <strong className="text-zinc-300">node get-session.js</strong> komutunu çalıştırın ve aldığınız kodu buraya yapıştırın.
+                      Tarayıcınızdan <strong className="text-zinc-300">Cookie-Editor</strong> eklentisiyle ihraç ettiğiniz çerez JSON listesini veya doğrudan geliştirici araçlarından aldığınız <strong className="text-zinc-300">sessionid</strong> çerez değerini buraya yapıştırabilirsiniz.
                     </p>
                   </div>
                 )}

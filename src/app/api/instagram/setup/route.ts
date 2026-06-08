@@ -27,14 +27,86 @@ export async function POST(req: Request) {
       console.log(`[Instagram Setup] Verifying session JSON for ${username} on Business ${businessId}`);
       const ig = getIgClient(businessId, username);
       try {
-        await ig.state.deserialize(sessionJson);
+        let isImported = false;
+        
+        try {
+          const parsed = JSON.parse(sessionJson);
+          
+          if (Array.isArray(parsed)) {
+            // Format B: Chrome/Firefox cookie JSON list from extensions like Cookie-Editor
+            const { Cookie } = require('tough-cookie');
+            for (const c of parsed) {
+              const name = c.name || c.key;
+              const value = c.value;
+              if (!name || !value) continue;
+              
+              const cookie = new Cookie({
+                key: name,
+                value: value,
+                domain: 'instagram.com',
+                path: c.path || '/',
+                secure: c.secure !== false,
+                httpOnly: c.httpOnly !== false
+              });
+              await ig.state.cookieJar.setCookie(cookie, 'https://i.instagram.com/');
+            }
+            isImported = true;
+            console.log('[Instagram Setup] Successfully imported session from cookie JSON array.');
+          } else if (parsed && parsed.cookies) {
+            // Format A: Serialized state JSON
+            await ig.state.deserialize(sessionJson);
+            isImported = true;
+            console.log('[Instagram Setup] Successfully imported session from serialized state JSON.');
+          }
+        } catch {
+          // If JSON parse fails, it will fall back to raw session ID
+        }
+
+        if (!isImported) {
+          // Format C: Raw session ID string
+          const rawSessionId = sessionJson.trim();
+          if (rawSessionId) {
+            const { Cookie } = require('tough-cookie');
+            
+            // Extract user id if present in the format user_id:token or user_id%3Atoken
+            let dsUserId = '';
+            if (rawSessionId.includes('%3A')) {
+              dsUserId = rawSessionId.split('%3A')[0];
+            } else if (rawSessionId.includes(':')) {
+              dsUserId = rawSessionId.split(':')[0];
+            }
+
+            const cookiesToSet = [
+              { key: 'sessionid', value: rawSessionId }
+            ];
+            if (dsUserId) {
+              cookiesToSet.push({ key: 'ds_user_id', value: dsUserId });
+            }
+
+            for (const item of cookiesToSet) {
+              const cookie = new Cookie({
+                key: item.key,
+                value: item.value,
+                domain: 'instagram.com',
+                path: '/',
+                secure: true,
+                httpOnly: true
+              });
+              await ig.state.cookieJar.setCookie(cookie, 'https://i.instagram.com/');
+            }
+            console.log('[Instagram Setup] Successfully imported session from raw sessionid string.');
+          } else {
+            throw new Error('Oturum kodu boş olamaz.');
+          }
+        }
+
         // Test connectivity and session validity
         await ig.feed.directInbox().items();
         serializedState = await ig.state.serialize();
       } catch (err: any) {
         console.error(`[Instagram Setup] Session JSON verification failed:`, err);
         return NextResponse.json({
-          error: `Oturum kodu doğrulanamadı. Kodun doğru kopyalandığından emin olun veya yerel betik ile yeni bir kod üretin. Hata: ${err.message || err}`
+          error: `Oturum kodu doğrulanamadı. Tarayıcınızdan doğru çerezleri kopyaladığınızdan emin olun. Hata: ${err.message || err}`
         }, { status: 400 });
       }
     } else {
