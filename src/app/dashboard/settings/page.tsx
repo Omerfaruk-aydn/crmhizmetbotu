@@ -56,8 +56,10 @@ export default function SettingsPage() {
   const [igHandle, setIgHandle] = useState<string | null>(null);
   const [igDisconnecting, setIgDisconnecting] = useState(false);
   const [showIgModal, setShowIgModal] = useState(false);
+  const [igMode, setIgMode] = useState<'credentials' | 'json'>('credentials');
   const [igUsername, setIgUsername] = useState('');
   const [igPassword, setIgPassword] = useState('');
+  const [igSessionJson, setIgSessionJson] = useState('');
   const [igConnecting, setIgConnecting] = useState(false);
   const [igError, setIgError] = useState<string | null>(null);
 
@@ -148,7 +150,11 @@ export default function SettingsPage() {
       const res = await fetch('/api/instagram/setup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: igUsername, password: igPassword })
+        body: JSON.stringify({
+          username: igUsername,
+          password: igMode === 'credentials' ? igPassword : '',
+          sessionJson: igMode === 'json' ? igSessionJson : ''
+        })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Instagram bağlantısı kurulamadı.');
@@ -158,6 +164,7 @@ export default function SettingsPage() {
       setShowIgModal(false);
       setIgUsername('');
       setIgPassword('');
+      setIgSessionJson('');
     } catch (err: any) {
       setIgError(err.message);
     } finally {
@@ -342,15 +349,37 @@ export default function SettingsPage() {
                 <div>
                   <h3 className="text-white font-bold text-sm">Instagram Hesabını Bağla</h3>
                   <p className="text-zinc-500 text-[10px] mt-1">
-                    Instagram kullanıcı adınızı ve şifrenizi girerek asistanınızı bağlayın.
+                    Asistanınızı bağlamak için giriş yöntemini seçin.
                   </p>
                 </div>
+              </div>
+
+              {/* Mode Switcher */}
+              <div className="flex bg-zinc-900 p-1 rounded-xl border border-zinc-800 text-xs">
+                <button
+                  type="button"
+                  onClick={() => { setIgMode('credentials'); setIgError(null); }}
+                  className={`flex-1 py-1.5 rounded-lg text-[10px] font-semibold transition-all ${
+                    igMode === 'credentials' ? 'bg-zinc-800 text-white font-bold' : 'text-zinc-400 hover:text-zinc-200'
+                  }`}
+                >
+                  Şifre ile Giriş
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setIgMode('json'); setIgError(null); }}
+                  className={`flex-1 py-1.5 rounded-lg text-[10px] font-semibold transition-all ${
+                    igMode === 'json' ? 'bg-zinc-800 text-white font-bold' : 'text-zinc-400 hover:text-zinc-200'
+                  }`}
+                >
+                  Oturum Kodu (Güvenli)
+                </button>
               </div>
 
               {igError && (
                 <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-[10px] text-red-400 flex items-center gap-2">
                   <AlertCircle className="w-4 h-4 shrink-0" />
-                  <span>{igError}</span>
+                  <span className="break-all">{igError}</span>
                 </div>
               )}
 
@@ -366,17 +395,37 @@ export default function SettingsPage() {
                     className="bg-zinc-900 border border-zinc-800 rounded-xl p-2.5 text-xs text-white outline-none focus:border-zinc-700 w-full"
                   />
                 </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-[9px] text-zinc-500 uppercase font-semibold">Şifre</label>
-                  <input
-                    type="password"
-                    required
-                    value={igPassword}
-                    onChange={(e) => setIgPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="bg-zinc-900 border border-zinc-800 rounded-xl p-2.5 text-xs text-white outline-none focus:border-zinc-700 w-full"
-                  />
-                </div>
+
+                {igMode === 'credentials' ? (
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[9px] text-zinc-500 uppercase font-semibold">Şifre</label>
+                    <input
+                      type="password"
+                      required
+                      value={igPassword}
+                      onChange={(e) => setIgPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="bg-zinc-900 border border-zinc-800 rounded-xl p-2.5 text-xs text-white outline-none focus:border-zinc-700 w-full"
+                    />
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-1">
+                    <div className="flex justify-between items-center">
+                      <label className="text-[9px] text-zinc-500 uppercase font-semibold">Oturum Kodu (Session JSON)</label>
+                    </div>
+                    <textarea
+                      required
+                      rows={3}
+                      value={igSessionJson}
+                      onChange={(e) => setIgSessionJson(e.target.value)}
+                      placeholder='{"cookies": [...], "ds_user_id": "..."}'
+                      className="bg-zinc-900 border border-zinc-800 rounded-xl p-2.5 text-[10px] text-zinc-300 font-mono outline-none focus:border-zinc-700 w-full resize-none"
+                    />
+                    <p className="text-[9px] text-zinc-500 leading-normal mt-0.5">
+                      Instagram IP engellemelerini aşmak için bilgisayarınızda yerel olarak <strong className="text-zinc-300">node get-session.js</strong> komutunu çalıştırın ve aldığınız kodu buraya yapıştırın.
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center gap-3 pt-2">

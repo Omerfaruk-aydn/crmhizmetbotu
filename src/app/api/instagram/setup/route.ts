@@ -14,33 +14,56 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Yetkilendirme hatası.' }, { status: 401 });
     }
 
-    const { username, password } = await req.json();
+    const { username, password, sessionJson } = await req.json();
 
-    if (!username || !password) {
-      return NextResponse.json({ error: 'Kullanıcı adı ve şifre zorunludur.' }, { status: 400 });
+    if (!username) {
+      return NextResponse.json({ error: 'Kullanıcı adı zorunludur.' }, { status: 400 });
     }
 
     const businessId = ctx.businessId;
-    console.log(`[Instagram Setup] Attempting login for ${username} on Business ${businessId}`);
+    let serializedState: any = null;
 
-    // Try logging in to verify credentials
-    const ig = getIgClient(businessId, username);
-    try {
-      await ig.simulate.preLoginFlow();
-      await ig.account.login(username, password);
-      process.nextTick(async () => await ig.simulate.postLoginFlow());
-    } catch (err: any) {
-      console.error(`[Instagram Setup] Verification failed for ${username}:`, err);
-      return NextResponse.json({
-        error: `Instagram girişi başarısız. Şifrenizi veya kullanıcı adınızı kontrol edin. Hata: ${err.message || err}`
-      }, { status: 400 });
+    if (sessionJson) {
+      console.log(`[Instagram Setup] Verifying session JSON for ${username} on Business ${businessId}`);
+      const ig = getIgClient(businessId, username);
+      try {
+        await ig.state.deserialize(sessionJson);
+        // Test connectivity and session validity
+        await ig.feed.directInbox().items();
+        serializedState = await ig.state.serialize();
+      } catch (err: any) {
+        console.error(`[Instagram Setup] Session JSON verification failed:`, err);
+        return NextResponse.json({
+          error: `Oturum kodu doğrulanamadı. Kodun doğru kopyalandığından emin olun veya yerel betik ile yeni bir kod üretin. Hata: ${err.message || err}`
+        }, { status: 400 });
+      }
+    } else {
+      if (!password) {
+        return NextResponse.json({ error: 'Şifre zorunludur.' }, { status: 400 });
+      }
+
+      console.log(`[Instagram Setup] Attempting login for ${username} on Business ${businessId}`);
+      const ig = getIgClient(businessId, username);
+      try {
+        await ig.simulate.preLoginFlow();
+        await ig.account.login(username, password);
+        process.nextTick(async () => {
+          try {
+            await ig.simulate.postLoginFlow();
+          } catch (e) {}
+        });
+        serializedState = await ig.state.serialize();
+      } catch (err: any) {
+        console.error(`[Instagram Setup] Verification failed for ${username}:`, err);
+        return NextResponse.json({
+          error: `Instagram girişi başarısız. Şifrenizi veya kullanıcı adınızı kontrol edin. Hata: ${err.message || err}`
+        }, { status: 400 });
+      }
     }
 
-    // Serialize session state to save to DB
-    const serializedState = await ig.state.serialize();
     const configData = {
       username,
-      password,
+      password: password || '',
       sessionState: JSON.stringify(serializedState),
       lastProcessedMessages: {} // To store threadId -> lastMessageId mapping
     };
