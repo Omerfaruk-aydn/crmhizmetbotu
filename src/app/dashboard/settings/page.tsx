@@ -62,6 +62,9 @@ export default function SettingsPage() {
   const [igSessionJson, setIgSessionJson] = useState('');
   const [igConnecting, setIgConnecting] = useState(false);
   const [igError, setIgError] = useState<string | null>(null);
+  const [ig2faRequired, setIg2faRequired] = useState(false);
+  const [ig2faIdentifier, setIg2faIdentifier] = useState('');
+  const [ig2faCode, setIg2faCode] = useState('');
 
   useEffect(() => {
     const fetchSettings = async () => {
@@ -147,17 +150,32 @@ export default function SettingsPage() {
     setIgConnecting(true);
     setIgError(null);
     try {
+      const payload: any = {
+        username: igUsername,
+        password: igMode === 'credentials' ? igPassword : '',
+        sessionJson: igMode === 'json' ? igSessionJson : ''
+      };
+
+      if (ig2faRequired) {
+        payload.twoFactorCode = ig2faCode;
+        payload.twoFactorIdentifier = ig2faIdentifier;
+      }
+
       const res = await fetch('/api/instagram/setup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          username: igUsername,
-          password: igMode === 'credentials' ? igPassword : '',
-          sessionJson: igMode === 'json' ? igSessionJson : ''
-        })
+        body: JSON.stringify(payload)
       });
+      
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Instagram bağlantısı kurulamadı.');
+      
+      if (data.twoFactorRequired) {
+        setIg2faRequired(true);
+        setIg2faIdentifier(data.twoFactorIdentifier);
+        setIg2faCode('');
+        return;
+      }
       
       setIgLinked(true);
       setIgHandle(`@${igUsername}`);
@@ -165,6 +183,9 @@ export default function SettingsPage() {
       setIgUsername('');
       setIgPassword('');
       setIgSessionJson('');
+      setIg2faRequired(false);
+      setIg2faIdentifier('');
+      setIg2faCode('');
     } catch (err: any) {
       setIgError(err.message);
     } finally {
@@ -335,6 +356,9 @@ export default function SettingsPage() {
               onClick={() => {
                 setShowIgModal(false);
                 setIgError(null);
+                setIg2faRequired(false);
+                setIg2faIdentifier('');
+                setIg2faCode('');
               }}
               className="absolute top-4 right-4 text-zinc-500 hover:text-white transition-colors"
             >
@@ -384,47 +408,68 @@ export default function SettingsPage() {
               )}
 
               <div className="space-y-3">
-                <div className="flex flex-col gap-1">
-                  <label className="text-[9px] text-zinc-500 uppercase font-semibold">Kullanıcı Adı</label>
-                  <input
-                    type="text"
-                    required
-                    value={igUsername}
-                    onChange={(e) => setIgUsername(e.target.value)}
-                    placeholder="kullanici_adi"
-                    className="bg-zinc-900 border border-zinc-800 rounded-xl p-2.5 text-xs text-white outline-none focus:border-zinc-700 w-full"
-                  />
-                </div>
-
-                {igMode === 'credentials' ? (
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[9px] text-zinc-500 uppercase font-semibold">Şifre</label>
+                {ig2faRequired ? (
+                  <div className="flex flex-col gap-2 bg-purple-950/20 border border-purple-900/30 p-3.5 rounded-xl">
+                    <label className="text-[9px] text-purple-400 uppercase font-bold tracking-wider">İki Aşamalı Doğrulama Kodu</label>
                     <input
-                      type="password"
+                      type="text"
                       required
-                      value={igPassword}
-                      onChange={(e) => setIgPassword(e.target.value)}
-                      placeholder="••••••••"
-                      className="bg-zinc-900 border border-zinc-800 rounded-xl p-2.5 text-xs text-white outline-none focus:border-zinc-700 w-full"
+                      value={ig2faCode}
+                      onChange={(e) => setIg2faCode(e.target.value)}
+                      placeholder="6 haneli doğrulama kodu"
+                      maxLength={6}
+                      className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-sm text-center font-semibold text-white tracking-widest outline-none focus:border-purple-600 w-full"
                     />
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-1">
-                    <div className="flex justify-between items-center">
-                      <label className="text-[9px] text-zinc-500 uppercase font-semibold">Oturum Kodu veya Çerez Listesi</label>
-                    </div>
-                    <textarea
-                      required
-                      rows={3}
-                      value={igSessionJson}
-                      onChange={(e) => setIgSessionJson(e.target.value)}
-                      placeholder='[{"name": "sessionid", "value": "..."}, ...]'
-                      className="bg-zinc-900 border border-zinc-800 rounded-xl p-2.5 text-[10px] text-zinc-300 font-mono outline-none focus:border-zinc-700 w-full resize-none"
-                    />
-                    <p className="text-[9px] text-zinc-500 leading-normal mt-0.5">
-                      Tarayıcınızdan <strong className="text-zinc-300">Cookie-Editor</strong> eklentisiyle ihraç ettiğiniz çerez JSON listesini veya doğrudan geliştirici araçlarından aldığınız <strong className="text-zinc-300">sessionid</strong> çerez değerini buraya yapıştırabilirsiniz.
+                    <p className="text-[9px] text-zinc-500 leading-normal mt-1">
+                      Instagram hesabınızda 2FA koruması etkin. Telefonunuza veya doğrulama uygulamanıza gelen 6 haneli kodu yukarıya girin.
                     </p>
                   </div>
+                ) : (
+                  <>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[9px] text-zinc-500 uppercase font-semibold">Kullanıcı Adı</label>
+                      <input
+                        type="text"
+                        required
+                        value={igUsername}
+                        onChange={(e) => setIgUsername(e.target.value)}
+                        placeholder="kullanici_adi"
+                        disabled={ig2faRequired}
+                        className="bg-zinc-900 border border-zinc-800 rounded-xl p-2.5 text-xs text-white outline-none focus:border-zinc-700 w-full disabled:opacity-50"
+                      />
+                    </div>
+
+                    {igMode === 'credentials' ? (
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[9px] text-zinc-500 uppercase font-semibold">Şifre</label>
+                        <input
+                          type="password"
+                          required
+                          value={igPassword}
+                          onChange={(e) => setIgPassword(e.target.value)}
+                          placeholder="••••••••"
+                          className="bg-zinc-900 border border-zinc-800 rounded-xl p-2.5 text-xs text-white outline-none focus:border-zinc-700 w-full"
+                        />
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-1">
+                        <div className="flex justify-between items-center">
+                          <label className="text-[9px] text-zinc-500 uppercase font-semibold">Oturum Kodu veya Çerez Listesi</label>
+                        </div>
+                        <textarea
+                          required
+                          rows={3}
+                          value={igSessionJson}
+                          onChange={(e) => setIgSessionJson(e.target.value)}
+                          placeholder='[{"name": "sessionid", "value": "..."}, ...]'
+                          className="bg-zinc-900 border border-zinc-800 rounded-xl p-2.5 text-[10px] text-zinc-300 font-mono outline-none focus:border-zinc-700 w-full resize-none"
+                        />
+                        <p className="text-[9px] text-zinc-500 leading-normal mt-0.5">
+                          Tarayıcınızdan <strong className="text-zinc-300">Cookie-Editor</strong> eklentisiyle ihraç ettiğiniz çerez JSON listesini veya doğrudan geliştirici araçlarından aldığınız <strong className="text-zinc-300">sessionid</strong> çerez değerini buraya yapıştırabilirsiniz.
+                        </p>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
 
@@ -434,6 +479,9 @@ export default function SettingsPage() {
                   onClick={() => {
                     setShowIgModal(false);
                     setIgError(null);
+                    setIg2faRequired(false);
+                    setIg2faIdentifier('');
+                    setIg2faCode('');
                   }}
                   className="w-1/2 py-2 border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-white rounded-xl text-xs font-bold transition-all"
                 >

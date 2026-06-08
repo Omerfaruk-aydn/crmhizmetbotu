@@ -14,7 +14,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Yetkilendirme hatası.' }, { status: 401 });
     }
 
-    const { username, password, sessionJson } = await req.json();
+    const { username, password, sessionJson, twoFactorCode, twoFactorIdentifier } = await req.json();
 
     if (!username) {
       return NextResponse.json({ error: 'Kullanıcı adı zorunludur.' }, { status: 400 });
@@ -23,7 +23,32 @@ export async function POST(req: Request) {
     const businessId = ctx.businessId;
     let serializedState: any = null;
 
-    if (sessionJson) {
+    if (twoFactorCode && twoFactorIdentifier) {
+      // 2FA Verification Flow
+      console.log(`[Instagram Setup] Verifying 2FA code for ${username} on Business ${businessId}`);
+      const ig = getIgClient(businessId, username);
+      try {
+        await ig.account.twoFactorLogin({
+          username,
+          verificationCode: twoFactorCode,
+          twoFactorIdentifier: twoFactorIdentifier,
+          trustThisDevice: '1'
+        });
+        
+        process.nextTick(async () => {
+          try {
+            await ig.simulate.postLoginFlow();
+          } catch (e) {}
+        });
+        
+        serializedState = await ig.state.serialize();
+      } catch (err: any) {
+        console.error(`[Instagram Setup] 2FA code verification failed:`, err);
+        return NextResponse.json({
+          error: `Girdiğiniz doğrulama kodu geçersiz veya süresi dolmuş. Hata: ${err.message || err}`
+        }, { status: 400 });
+      }
+    } else if (sessionJson) {
       console.log(`[Instagram Setup] Verifying session JSON for ${username} on Business ${businessId}`);
       const ig = getIgClient(businessId, username);
       try {
@@ -127,6 +152,18 @@ export async function POST(req: Request) {
         serializedState = await ig.state.serialize();
       } catch (err: any) {
         console.error(`[Instagram Setup] Verification failed for ${username}:`, err);
+        
+        // Catch two-factor required error
+        if (err.name === 'IgLoginTwoFactorRequiredError' || (err.response && err.response.body && err.response.body.two_factor_info)) {
+          const twoFactorInfo = err.response.body.two_factor_info;
+          console.log(`[Instagram Setup] Two-factor authentication required for ${username}`);
+          return NextResponse.json({
+            twoFactorRequired: true,
+            twoFactorIdentifier: twoFactorInfo.two_factor_identifier,
+            username
+          });
+        }
+        
         return NextResponse.json({
           error: `Instagram girişi başarısız. Şifrenizi veya kullanıcı adınızı kontrol edin. Hata: ${err.message || err}`
         }, { status: 400 });

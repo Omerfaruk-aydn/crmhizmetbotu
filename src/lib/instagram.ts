@@ -8,6 +8,14 @@ export function getIgClient(businessId: string, username: string): IgApiClient {
   if (!clients[businessId]) {
     const ig = new IgApiClient();
     ig.state.generateDevice(username);
+    
+    // Apply proxy if configured
+    const proxyUrl = process.env.INSTAGRAM_PROXY_URL;
+    if (proxyUrl) {
+      ig.state.proxyUrl = proxyUrl;
+      console.log(`[Instagram Client] Using proxy: ${proxyUrl.includes('@') ? proxyUrl.split('@')[1] : proxyUrl}`);
+    }
+    
     clients[businessId] = ig;
   }
   return clients[businessId];
