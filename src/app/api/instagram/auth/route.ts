@@ -8,9 +8,9 @@ export async function GET(request: Request) {
       return new Response('Unauthorized', { status: 401 });
     }
 
-    const appId = process.env.INSTAGRAM_APP_ID;
+    const appId = process.env.FACEBOOK_APP_ID;
     if (!appId) {
-      return new Response('Instagram App ID is not configured', { status: 500 });
+      return new Response('Facebook App ID is not configured', { status: 500 });
     }
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || (() => {
@@ -20,19 +20,21 @@ export async function GET(request: Request) {
     })();
     const redirectUri = `${appUrl}/api/instagram/callback`;
 
-    // Instagram API with Instagram Login scopes
+    // Facebook Login for Business scopes
     const scopes = [
-      'instagram_business_basic',
-      'instagram_business_manage_messages',
-      'instagram_business_manage_comments'
+      'instagram_basic',
+      'instagram_manage_messages',
+      'pages_show_list',
+      'pages_read_engagement',
+      'pages_manage_metadata'
     ].join(',');
 
-    // Direct Instagram Login OAuth URL
-    const oauthUrl = `https://api.instagram.com/oauth/authorize?client_id=${appId}&redirect_uri=${encodeURIComponent(
+    // Redirect to Facebook Login Dialog
+    const oauthUrl = `https://www.facebook.com/v21.0/dialog/oauth?client_id=${appId}&redirect_uri=${encodeURIComponent(
       redirectUri
-    )}&scope=${scopes}&response_type=code&state=${authCtx.businessId}`;
+    )}&scope=${scopes}&state=${authCtx.businessId}`;
 
-    console.log('Redirecting to Instagram OAuth URL with redirect_uri:', redirectUri);
+    console.log('Redirecting to Facebook OAuth URL with redirect_uri:', redirectUri);
 
     return NextResponse.redirect(oauthUrl);
   } catch (err: any) {

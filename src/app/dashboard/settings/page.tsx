@@ -712,12 +712,23 @@ export default function SettingsPage() {
                     Müşterilerinizin Instagram DM'lerine yapay zeka ile otomatik cevap vermek için tek tıkla bağlanın.
                   </p>
                   <button
-                    onClick={() => setShowIgModal(true)}
+                    onClick={() => {
+                      window.location.href = '/api/instagram/auth';
+                    }}
                     className="w-full py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-[10px] font-bold transition-all flex items-center justify-center gap-1 text-center"
                   >
                     <ExternalLink className="w-3 h-3" />
-                    Instagram ile Bağlan
+                    Instagram ile Bağlan (Resmi)
                   </button>
+                  <div className="text-center pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setShowIgModal(true)}
+                      className="text-[9px] text-zinc-600 hover:text-zinc-400 transition-colors underline"
+                    >
+                      Alternatif Manuel Giriş (Gelişmiş)
+                    </button>
+                  </div>
                 </>
               )}
             </div>
