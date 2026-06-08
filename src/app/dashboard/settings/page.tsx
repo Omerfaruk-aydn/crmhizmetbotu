@@ -55,6 +55,11 @@ export default function SettingsPage() {
   const [igLinked, setIgLinked] = useState(false);
   const [igHandle, setIgHandle] = useState<string | null>(null);
   const [igDisconnecting, setIgDisconnecting] = useState(false);
+  const [showIgModal, setShowIgModal] = useState(false);
+  const [igUsername, setIgUsername] = useState('');
+  const [igPassword, setIgPassword] = useState('');
+  const [igConnecting, setIgConnecting] = useState(false);
+  const [igError, setIgError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchSettings = async () => {
@@ -132,6 +137,31 @@ export default function SettingsPage() {
       setError(err.message);
     } finally {
       setIgDisconnecting(false);
+    }
+  };
+
+  const handleConnectInstagram = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIgConnecting(true);
+    setIgError(null);
+    try {
+      const res = await fetch('/api/instagram/setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: igUsername, password: igPassword })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Instagram bağlantısı kurulamadı.');
+      
+      setIgLinked(true);
+      setIgHandle(`@${igUsername}`);
+      setShowIgModal(false);
+      setIgUsername('');
+      setIgPassword('');
+    } catch (err: any) {
+      setIgError(err.message);
+    } finally {
+      setIgConnecting(false);
     }
   };
 
@@ -286,6 +316,90 @@ export default function SettingsPage() {
                 Durumu Yenile
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Instagram Credentials Modal */}
+      {showIgModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-6 max-w-sm w-full shadow-2xl relative">
+            <button
+              onClick={() => {
+                setShowIgModal(false);
+                setIgError(null);
+              }}
+              className="absolute top-4 right-4 text-zinc-500 hover:text-white transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <form onSubmit={handleConnectInstagram} className="space-y-4">
+              <div className="text-center space-y-2">
+                <div className="w-12 h-12 rounded-full bg-purple-500/10 border border-purple-500/20 flex items-center justify-center mx-auto">
+                  <Wifi className="w-6 h-6 text-purple-400" />
+                </div>
+                <div>
+                  <h3 className="text-white font-bold text-sm">Instagram Hesabını Bağla</h3>
+                  <p className="text-zinc-500 text-[10px] mt-1">
+                    Instagram kullanıcı adınızı ve şifrenizi girerek asistanınızı bağlayın.
+                  </p>
+                </div>
+              </div>
+
+              {igError && (
+                <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-[10px] text-red-400 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{igError}</span>
+                </div>
+              )}
+
+              <div className="space-y-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-[9px] text-zinc-500 uppercase font-semibold">Kullanıcı Adı</label>
+                  <input
+                    type="text"
+                    required
+                    value={igUsername}
+                    onChange={(e) => setIgUsername(e.target.value)}
+                    placeholder="kullanici_adi"
+                    className="bg-zinc-900 border border-zinc-800 rounded-xl p-2.5 text-xs text-white outline-none focus:border-zinc-700 w-full"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[9px] text-zinc-500 uppercase font-semibold">Şifre</label>
+                  <input
+                    type="password"
+                    required
+                    value={igPassword}
+                    onChange={(e) => setIgPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="bg-zinc-900 border border-zinc-800 rounded-xl p-2.5 text-xs text-white outline-none focus:border-zinc-700 w-full"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowIgModal(false);
+                    setIgError(null);
+                  }}
+                  className="w-1/2 py-2 border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-white rounded-xl text-xs font-bold transition-all"
+                >
+                  Vazgeç
+                </button>
+                <button
+                  type="submit"
+                  disabled={igConnecting}
+                  className="w-1/2 py-2 bg-purple-600 hover:bg-purple-500 disabled:bg-zinc-800 text-white disabled:text-zinc-500 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5"
+                >
+                  {igConnecting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                  <span>{igConnecting ? 'Bağlanıyor...' : 'Bağlantıyı Kur'}</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
@@ -548,13 +662,13 @@ export default function SettingsPage() {
                   <p className="text-[10px] text-zinc-500 leading-relaxed">
                     Müşterilerinizin Instagram DM'lerine yapay zeka ile otomatik cevap vermek için tek tıkla bağlanın.
                   </p>
-                  <a
-                    href="/api/instagram/auth"
+                  <button
+                    onClick={() => setShowIgModal(true)}
                     className="w-full py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-[10px] font-bold transition-all flex items-center justify-center gap-1 text-center"
                   >
                     <ExternalLink className="w-3 h-3" />
                     Instagram ile Bağlan
-                  </a>
+                  </button>
                 </>
               )}
             </div>

@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
 import { getAuthContext } from '@/lib/auth-utils';
 import { db } from '@/lib/db';
+import { getIgClient } from '@/lib/instagram';
 
 /**
  * POST /api/instagram/setup
- * Saves or updates the Instagram integration config for the current business.
- * Body: { pageAccessToken, verifyToken }
+ * Authenticates with Instagram using username & password, and saves integration config.
  */
 export async function POST(req: Request) {
   try {
@@ -14,13 +14,36 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Yetkilendirme hatası.' }, { status: 401 });
     }
 
-    const { pageAccessToken, verifyToken } = await req.json();
+    const { username, password } = await req.json();
 
-    if (!pageAccessToken) {
-      return NextResponse.json({ error: 'pageAccessToken zorunludur.' }, { status: 400 });
+    if (!username || !password) {
+      return NextResponse.json({ error: 'Kullanıcı adı ve şifre zorunludur.' }, { status: 400 });
     }
 
     const businessId = ctx.businessId;
+    console.log(`[Instagram Setup] Attempting login for ${username} on Business ${businessId}`);
+
+    // Try logging in to verify credentials
+    const ig = getIgClient(businessId, username);
+    try {
+      await ig.simulate.preLoginFlow();
+      await ig.account.login(username, password);
+      process.nextTick(async () => await ig.simulate.postLoginFlow());
+    } catch (err: any) {
+      console.error(`[Instagram Setup] Verification failed for ${username}:`, err);
+      return NextResponse.json({
+        error: `Instagram girişi başarısız. Şifrenizi veya kullanıcı adınızı kontrol edin. Hata: ${err.message || err}`
+      }, { status: 400 });
+    }
+
+    // Serialize session state to save to DB
+    const serializedState = await ig.state.serialize();
+    const configData = {
+      username,
+      password,
+      sessionState: JSON.stringify(serializedState),
+      lastProcessedMessages: {} // To store threadId -> lastMessageId mapping
+    };
 
     // Upsert integration record
     const existing = await db.integration.findFirst({
@@ -32,10 +55,8 @@ export async function POST(req: Request) {
         where: { id: existing.id },
         data: {
           status: 'active',
-          config: {
-            pageAccessToken,
-            verifyToken: verifyToken || 'MY_VERIFY_TOKEN',
-          }
+          config: configData,
+          updatedAt: new Date()
         }
       });
     } else {
@@ -44,17 +65,20 @@ export async function POST(req: Request) {
           businessId,
           provider: 'instagram',
           status: 'active',
-          config: {
-            pageAccessToken,
-            verifyToken: verifyToken || 'MY_VERIFY_TOKEN',
-          }
+          config: configData
         }
       });
     }
 
+    // Save instagram handle to Business model
+    await db.business.update({
+      where: { id: businessId },
+      data: { instagramHandle: `@${username}` }
+    });
+
     return NextResponse.json({ success: true });
   } catch (err: any) {
-    console.error('[/api/instagram/setup] Error:', err);
+    console.error('[/api/instagram/setup] POST Error:', err);
     return NextResponse.json({ error: err.message || 'Kayıt başarısız.' }, { status: 500 });
   }
 }
@@ -79,7 +103,7 @@ export async function GET(req: Request) {
     return NextResponse.json({
       connected: integration?.status === 'active',
       status: integration?.status || 'inactive',
-      instagramHandle: config?.instagramHandle || null
+      instagramHandle: config?.username ? `@${config.username}` : null
     });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
