@@ -41,3 +41,21 @@ yarn-error.log*
 next-env.d.ts
 
 .vercel
+
+# Python
+instagram-service/venv/
+instagram-service/__pycache__/
+*.pyc
+*.pyo
+
+# Test / debug scripts
+debug-session.js
+ig-collect-session.js
+instagram-browser-login.js
+interactive-login.js
+test-cookie-import.js
+test-ig-proxy.js
+test-local.js
+test-web-api.js
+vercel_logs.txt
+*.png
